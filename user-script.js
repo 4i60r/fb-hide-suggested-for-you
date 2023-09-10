@@ -22,7 +22,7 @@ It may break at any time.
 const SUGGESTED_FOR_YOU_TEXT = "Proponowana dla Ciebie";
 
 // Translations
-const SHOW_POST_LABEL_TEXT = "Proponowany post ukryty."; // użytkownika <b>__POST_USERNAME__</b>
+const SHOW_POST_LABEL_TEXT = "Proponowany post ukryty"; // użytkownika <b>__POST_USERNAME__</b>
 const SHOW_POST_BUTTON_TEXT = "Pokaż";
 
 const NEW_POST_USER_AVATAR_SELECTOR = "h3 + a[aria-label][href]";
@@ -142,6 +142,7 @@ function getPostInfo(post) {
 
 function hidePost($post) {
     if(isMobile()) {
+        /*
         const postHeight = $post.attr("data-actual-height");
         const nextHeight = $post.find(".showhide-container").outerHeight();
         $post
@@ -150,6 +151,8 @@ function hidePost($post) {
             .attr("data-h-previous-height", postHeight);
 
         $post.find(".fbh-sug-u").css("display", "none");
+        */
+        $post.find(">div:not(.showhide-container)").css("visibility", "hidden");
     } else {
         const $postContentWrapper = $post.children(":not(.showhide-container)").first();
         $postContentWrapper.css("display", "none");
@@ -159,12 +162,15 @@ function hidePost($post) {
 
 function showPost($post) {
     if(isMobile()) {
+        /*
         const prevHeight = $post.attr("data-h-previous-height");
         $post
             .css("height", prevHeight)
             .attr("data-actual-height", prevHeight);
 
         $post.find(".fbh-sug-u").css("display", "");
+        */
+        $post.find(">div:not(.showhide-container)").css("visibility", "visible");
     } else {
         const $postContentWrapper = $post.children(":not(.showhide-container)").first();
         $postContentWrapper.css("display", '');
@@ -186,19 +192,16 @@ function processPost(node) {
     //console.log(postText);
 
     if(postText.indexOf(SUGGESTED_FOR_YOU_TEXT) > -1) {
-        if(isMobile()) {
-            $post.find(">div").wrapAll("<div class='fbh-sug-u'></div>");
-        }
-
-
         const labelText = SHOW_POST_LABEL_TEXT.replace("__POST_USERNAME__", postAuthor);
         const $showContainer = $(`<div class='showhide-container'>
-  <div class='showhide-label'>
-    ${labelText}
-  </div>
-  <div class='showhide-button'>
-    ${SHOW_POST_BUTTON_TEXT}
-  </div>
+          <div class='showhide-inner'>
+            <div class='showhide-label'>
+              ${labelText}
+            </div>
+            <div class='showhide-button'>
+              ${SHOW_POST_BUTTON_TEXT}
+            </div>
+          </div>
         </div>`).prependTo($post);
 
         $showContainer.css({
@@ -208,6 +211,12 @@ function processPost(node) {
             //justifyContent: "space-between",
             alignContent: "center",
             marginBottom: "15px"
+        });
+
+        $showContainer.find(".showhide-inner").css({
+            display: "flex",
+            alignContent: "center",
+            width: "100%"
         });
 
         $showContainer.find(".showhide-label").css({
@@ -236,6 +245,28 @@ function processPost(node) {
             showPost($post);
             $showContainer.remove();
         });
+
+        if(isMobile()) {
+            $showContainer.css({
+                background: "#a7a7a7",
+                position: "absolute",
+                left: 0,
+                top: 0,
+                width: "100%",
+                height: "100%"
+            })
+            .find(".showhide-inner").css({
+                width: "auto",
+                margin: "0 auto",
+                height: "fit-content",
+                flexDirection: "column",
+                placeSelf: "center"
+            })
+            .find(".showhide-button").css({
+                background: "#858585",
+                marginRight: "auto"
+            });
+        }
     }
 }
 
