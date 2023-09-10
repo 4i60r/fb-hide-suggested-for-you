@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         FB Hide Suggested for You
+// @name         FB Block Suggested for You
 // @namespace    http://tampermonkey.net/
 // @version      0.1
 // @description  The script blocks all posts that contain "Suggested for you" text.
@@ -7,6 +7,7 @@
 // @match        *://*.facebook.com/*
 // @icon         data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js
+
 // ==/UserScript==
 
 /*
@@ -21,17 +22,50 @@ It may break at any time.
 const SUGGESTED_FOR_YOU_TEXT = "Proponowana dla Ciebie";
 
 // Translations
-const SHOW_POST_LABEL_TEXT = "Proponowany post użytkownika <b>__POST_USERNAME__</b> ukryty.";
+const SHOW_POST_LABEL_TEXT = "Proponowany post ukryty."; // użytkownika <b>__POST_USERNAME__</b>
 const SHOW_POST_BUTTON_TEXT = "Pokaż";
 
 const NEW_POST_USER_AVATAR_SELECTOR = "h3 + a[aria-label][href]";
 const NEWSFEED_HEADER_SELECTOR = "h3[dir=auto]";
 
+
+
+function isMobile() {
+    return document.location.hostname.indexOf("m.") > -1;
+}
+
 function getNewPostWrapper() {
-    return $(NEW_POST_USER_AVATAR_SELECTOR).parents("div[aria-label]").parents(2).eq(2);
+    return isMobile()
+    ? $("div[data-mcomponent=ServerImageArea]>img.img.rounded").parents("div[class*='otf-'][class*='displayed']").first()
+    : $(NEW_POST_USER_AVATAR_SELECTOR).parents("div[aria-label]").parents(2).eq(2);
 }
 
 function getNewsfeedWrapper() {
+    if(isMobile()) {
+        const innerHeight = window.innerHeight;
+        const safeInnerHeight = innerHeight - 30;
+
+        let foundCount = 0;
+        let elem = null;
+        $("div[data-actual-height]").each(function() {
+            if(elem)
+                return;
+
+            const t = $(this);
+            const t_height = parseInt(t.attr("data-actual-height"));
+            if(t_height > safeInnerHeight) {
+                foundCount++;
+            }
+
+            if(foundCount > 1) {
+                elem = t;
+            }
+        });
+
+        return elem;
+    }
+
+
     const $new = getNewPostWrapper();
 
     let wrapper = null;
@@ -49,6 +83,12 @@ function getNewsfeedWrapper() {
 
 function doesContainNewPostUserAvatar(el) {
     const $el = $(el);
+    if(isMobile()) {
+        // hack
+        return getNewPostWrapper().length > 0;
+    }
+
+
     return $el.is(NEW_POST_USER_AVATAR_SELECTOR) || $el.find(NEW_POST_USER_AVATAR_SELECTOR).length > 0;
 }
 
@@ -90,6 +130,47 @@ function waitForNewPostUserAvatarElement(callback) {
     });
 }
 
+function getPostInfo(post) {
+    const info = {};
+
+    const postAuthor = $post.find("a>strong").text();
+
+    info.author = postAuthor;
+
+    return info;
+}
+
+function hidePost($post) {
+    if(isMobile()) {
+        const postHeight = $post.attr("data-actual-height");
+        const nextHeight = $post.find(".showhide-container").outerHeight();
+        $post
+            .css("height", nextHeight)
+            .attr("data-actual-height", nextHeight)
+            .attr("data-h-previous-height", postHeight);
+
+        $post.find(".fbh-sug-u").css("display", "none");
+    } else {
+        const $postContentWrapper = $post.children(":not(.showhide-container)").first();
+        $postContentWrapper.css("display", "none");
+    }
+
+}
+
+function showPost($post) {
+    if(isMobile()) {
+        const prevHeight = $post.attr("data-h-previous-height");
+        $post
+            .css("height", prevHeight)
+            .attr("data-actual-height", prevHeight);
+
+        $post.find(".fbh-sug-u").css("display", "");
+    } else {
+        const $postContentWrapper = $post.children(":not(.showhide-container)").first();
+        $postContentWrapper.css("display", '');
+    }
+}
+
 function processPost(node) {
     if(!node)
         return;
@@ -105,6 +186,11 @@ function processPost(node) {
     //console.log(postText);
 
     if(postText.indexOf(SUGGESTED_FOR_YOU_TEXT) > -1) {
+        if(isMobile()) {
+            $post.find(">div").wrapAll("<div class='fbh-sug-u'></div>");
+        }
+
+
         const labelText = SHOW_POST_LABEL_TEXT.replace("__POST_USERNAME__", postAuthor);
         const $showContainer = $(`<div class='showhide-container'>
   <div class='showhide-label'>
@@ -117,7 +203,7 @@ function processPost(node) {
 
         $showContainer.css({
             background: "gray",
-            borderRadius: "6px",
+            borderRadius: isMobile() ? "0px" : "6px",
             display: "flex",
             //justifyContent: "space-between",
             alignContent: "center",
@@ -129,11 +215,9 @@ function processPost(node) {
             fontSize: "15px"
         });
 
+        hidePost($post);
+
         const $button = $showContainer.find(".showhide-button");
-
-        $postContentWrapper.css("display", "none");
-
-        const containerHeight = $showContainer.outerHeight();
         $button.css({
             background: "#676666",
             cursor: "pointer",
@@ -141,10 +225,15 @@ function processPost(node) {
             fontWeight: 500,
             padding: "10px 15px",
             alignSelf: "center",
-            marginBottom: "1px"
+            marginBottom: "1px",
+            zIndex: 0,
+            position: "relative",
+            pointerEvents: "all",
+            marginLeft: "auto",
+            marginRight: "10px",
         })
         .click(function() {
-            $postContentWrapper.css("display", '');
+            showPost($post);
             $showContainer.remove();
         });
     }
@@ -152,6 +241,9 @@ function processPost(node) {
 
 function attachNewsfeedChildrenListener() {
     const $wrapper = getNewsfeedWrapper();
+
+    console.log("isMobile", isMobile());
+    console.log("newsfeed", $wrapper);
     $wrapper.children().each(function() {
         processPost(this);
     });
